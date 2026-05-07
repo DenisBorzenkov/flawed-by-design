@@ -1,0 +1,112 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          # 1.10+ unlocks ephemeral resources for handling secrets without
+          # writing them into state. Required-version pin in versions.tf
+          # also bumped.
+          terraform_version: "1.10.5"
+          terraform_wrapper: false
+
+      - name: terraform fmt
+        run: terraform fmt -recursive -check -diff
+
+      - name: terraform validate (per layer)
+        run: |
+          set -e
+          for d in 00-providers 10-network 20-security 50-logging 30-ecs 40-observability modules/ecs_service; do
+            echo "== $d =="
+            ( cd terraform/$d && terraform init -backend=false -input=false >/dev/null && terraform validate )
+          done
+
+      - uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: latest
+
+      - name: tflint
+        run: tflint --recursive
+
+      # Checkov: emit SARIF (silent in the run log) and route the findings to
+      # GitHub's Code Scanning UI via the upload step below. soft_fail keeps
+      # CI green during triage; promote to hard-fail once CHECKOV_TRIAGE.md
+      # is empty.
+      - id: checkov
+        uses: bridgecrewio/checkov-action@master
+        with:
+          # All triaged-accept findings are listed in .checkov.yaml so
+          # net-new findings will fail the build. Triage decisions live
+          # in CHECKOV_TRIAGE.md.
+          config_file: .checkov.yaml
+          soft_fail: false
+          quiet: true
+          output_format: sarif
+          output_file_path: ./
+          log_level: WARNING
+          # The action's default container user can't write to the
+          # runner-mounted workspace; root sidesteps the permission error.
+          container_user: 0
+
+      # SARIF as a workflow artifact instead of GitHub Code Scanning:
+      # this repo is private and has no GHAS subscription, so the
+      # github/codeql-action/upload-sarif endpoint returns 403
+      # "Resource not accessible by integration". Artifacts work on any
+      # plan and stay attached to the run for the default 90 days.
+      - name: upload checkov SARIF artifact
+        if: always() && hashFiles('results_sarif.sarif') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkov-sarif
+          path: results_sarif.sarif
+          retention-days: 30
+
+      - name: shellcheck
+        uses: ludeeus/action-shellcheck@master
+        with:
+          additional_files: deploy.sh destroy.sh verify_health.sh
+
+      # Trivy filesystem scan: secrets + IaC misconfigs + dependency vulns.
+      # Overlaps with checkov on IaC but adds secret detection (gitleaks
+      # rule set) and CVE scanning of any vendored dependency files.
+      - name: trivy fs
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          # CRITICAL/HIGH only - MEDIUM/LOW would drown the signal in
+          # noise from stable upstream Docker base images.
+          severity: CRITICAL,HIGH
+          # Mirror the checkov skip list so we don't get duplicate noise
+          # on the same misconfigs (those are already triaged).
+          trivyignores: .trivyignore
+          # Hard fail: net-new CRITICAL/HIGH should break the build.
+          exit-code: "1"
+          ignore-unfixed: true
+
+      # Trivy image scan: pull the upstream base image and scan its OS
+      # packages + language-runtime CVEs. The Dockerfile FROM is fixed
+      # so this scan reflects the live runtime.
+      - name: trivy image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: infrastructureascode/hello-world:latest
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          # Don't fail CI on base image CVEs - we don't own the base
+          # and can only escalate via upstream. Findings still surface
+          # in the run log.
+          exit-code: "0"

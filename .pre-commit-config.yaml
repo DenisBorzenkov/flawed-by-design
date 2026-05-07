@@ -1,0 +1,43 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: check-added-large-files
+        args: [--maxkb=512]
+
+  - repo: https://github.com/antonbabenko/pre-commit-terraform
+    rev: v1.105.0
+    hooks:
+      - id: terraform_fmt
+      - id: terraform_validate
+      - id: terraform_tflint
+      - id: terraform_docs
+
+  # Checkov: static security/compliance scan over Terraform.
+  # Skip-list and rationale live in .checkov.yaml + CHECKOV_TRIAGE.md so
+  # both this hook and CI agree on what to ignore.
+  - repo: https://github.com/bridgecrewio/checkov
+    rev: 3.2.526
+    hooks:
+      - id: checkov
+        args:
+          - --config-file
+          - .checkov.yaml
+          - --quiet
+
+  - repo: https://github.com/koalaman/shellcheck-precommit
+    rev: v0.11.0
+    hooks:
+      - id: shellcheck
+        args: [-x]
+
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args: ['--baseline', '.detect-secrets.json']
+        exclude: '\.detect-secrets\.json$'

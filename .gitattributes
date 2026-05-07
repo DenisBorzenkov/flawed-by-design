@@ -1,0 +1,13 @@
+# Transcrypt - encrypts files matching these patterns at-rest in the git
+# repo, decrypted in working copy by anyone with the symmetric key.
+# After cloning, run `transcrypt -c aes-256-cbc -p '<key>'` once with the
+# shared key to unlock; commits then store ciphertext via the smudge/clean
+# filter. See https://github.com/elasticdog/transcrypt
+#
+# Patterns below are illustrative - add files containing real secrets.
+secrets/**           filter=crypt diff=crypt merge=crypt
+*.secrets.env        filter=crypt diff=crypt merge=crypt
+terraform.tfvars     filter=crypt diff=crypt merge=crypt
+
+# Always treat baselines as JSON for clean diffs.
+.detect-secrets.json text eol=lf

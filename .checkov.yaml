@@ -1,0 +1,137 @@
+# Checkov scan config. Loaded by the GitHub Actions checkov step
+# (`config_file: .checkov.yaml`) and the pre-commit hook
+# (`--config-file .checkov.yaml`).
+#
+# Every entry in `skip-check` has a triage decision recorded in
+# CHECKOV_TRIAGE.md - keep both files in sync. New findings should be
+# triaged in the doc first; only add a skip here once the decision is
+# "accept" (not "fix").
+#
+# CI runs with soft_fail=true while the triage list is being populated.
+# Once this list converges, flip soft_fail to false in ci.yml so net-new
+# findings break the build instead of riding silently in the SARIF
+# artifact.
+
+# NOTE: the bridgecrewio/checkov-action wrapper always scans the
+# workspace root regardless of what `directory:` is set here, so the
+# scan covers terraform/, accounts/_bootstrap/ and Dockerfile. Local
+# runs (`checkov --config-file .checkov.yaml`) match that behavior
+# without the explicit directory list below.
+
+# Pull the registry modules so checkov can scan their internals too.
+download-external-modules: true
+
+skip-check:
+  # ---- Network ACLs / Security Groups ----
+  # CKV_AWS_231: NACL ingress 1024-65535 covers ephemeral return traffic;
+  # range nominally includes 3389 but SGs block RDP at the next layer.
+  - CKV_AWS_231
+  # CKV_AWS_382: brief mandates "Outbound: Allow all traffic" on task SGs;
+  # no NAT means egress is constrained to VPC endpoints anyway.
+  - CKV_AWS_382
+  # CKV2_AWS_1: false positive - every NACL has subnet_ids set, but
+  # checkov reads the upstream subnet IDs out of remote_state and can't
+  # trace the attachment.
+  - CKV2_AWS_1
+  # CKV2_AWS_5: false positive - SGs are attached to ALBs / launch
+  # templates that live in the next layer; cross-state graph is opaque
+  # to checkov.
+  - CKV2_AWS_5
+
+  # ---- ALB ----
+  # CKV_AWS_150: ALB deletion-protection blocks `terraform destroy`;
+  # take-home wants clean teardown for validation. Enable in prod.
+  - CKV_AWS_150
+  # CKV_AWS_378: ALB↔TG hop is HTTP because TLS terminates at the ALB
+  # listener; standard pattern for ECS bridge-mode tasks behind ALB.
+  - CKV_AWS_378
+  # CKV2_AWS_28: app ALB is intentionally open. The brief only requires
+  # WAF on the Jenkins ALB (Portugal geo-match).
+  - CKV2_AWS_28
+  # CKV2_AWS_76: same scope as CKV_AWS_192 below - Jenkins WAF only
+  # enforces geo-allow PT, not Log4j-specific managed rules.
+  - CKV2_AWS_76
+
+  # ---- WAF ----
+  # CKV_AWS_192: web ACL's only rule is geo-allow PT; default-block on
+  # everything else IS the protection. AWS-managed Log4j rule would add
+  # cost without changing the threat surface here.
+  - CKV_AWS_192
+  # CKV2_AWS_31: WAF logging requires Kinesis Firehose + S3 + IAM -
+  # heavy-weight for a take-home that only blocks non-PT traffic. Add
+  # in prod.
+  - CKV2_AWS_31
+
+  # ---- ECR ----
+  # CKV_AWS_51: image_tag_mutability is now var-driven (default MUTABLE
+  # so the Jenkins pipeline can re-push :latest, per brief). Flip to
+  # IMMUTABLE in prod tfvars and use git-sha tags.
+  - CKV_AWS_51
+  # CKV_AWS_136: KMS encryption on ECR adds CMK + per-API-call charges
+  # for image storage that is already SSE-S3 by default.
+  - CKV_AWS_136
+
+  # ---- CloudWatch ----
+  # CKV_AWS_158: KMS on log groups - same cost/value calc as CKV_AWS_136;
+  # log groups here carry no user data.
+  - CKV_AWS_158
+  # CKV_AWS_338: 14-day retention is var-driven and intentional for cost
+  # minimization. 1-year would 26x the spend.
+  - CKV_AWS_338
+
+  # ---- ACM ----
+  # CKV_AWS_233: throwaway self-signed cert for the take-home; cert has
+  # no real consumers, so create-before-destroy is unnecessary.
+  - CKV_AWS_233
+
+  # ---- SNS ----
+  # CKV_AWS_26: ops topic carries alarm metadata only (no PII). KMS
+  # would force a key-policy on every alarm caller for no real benefit.
+  - CKV_AWS_26
+
+  # ---- S3 (ALB log bucket) ----
+  # CKV_AWS_18: chicken/egg - the log bucket can't log access to itself.
+  - CKV_AWS_18
+  # CKV_AWS_21: aws_s3_bucket_versioning is explicit with status=Suspended;
+  # log objects are write-once, versions = GB-month sprawl.
+  - CKV_AWS_21
+  # CKV_AWS_144: cross-region replication is out of scope for the
+  # single-region brief.
+  - CKV_AWS_144
+  # CKV_AWS_145: SSE-S3 (AES256) is set explicitly. KMS would require
+  # the ELB delivery principal to have kms:GenerateDataKey on the CMK,
+  # adding key-policy churn for marginal value on access logs.
+  - CKV_AWS_145
+  # CKV2_AWS_62: ALB log archive is write-once cold storage; downstream
+  # consumers (Athena, S3 Select) read on-demand - no event-driven flow.
+  - CKV2_AWS_62
+
+  # ---- Module sources ----
+  # CKV_TF_1: pinned via version constraint `~> 6.0` on the public
+  # Terraform Registry module. Commit-hash pinning is harder to bump
+  # and the registry already enforces signed module distribution.
+  - CKV_TF_1
+
+  # ---- Bootstrap (accounts/_bootstrap) ----
+  # CKV2_AWS_61: tfstate bucket has versioning Enabled (the safety net
+  # for state rollback). Adding lifecycle on noncurrent versions is a
+  # nice-to-have but the default behavior - keep all versions - is the
+  # safer one for a take-home.
+  - CKV2_AWS_61
+
+  # ---- VPC module internals ----
+  # CKV2_AWS_12: the terraform-aws-modules/vpc/aws default-SG management
+  # is opt-in via `manage_default_security_group_rules`; default off is
+  # what the module ships with. Tightening would require non-trivial
+  # input wiring inside the module call.
+  - CKV2_AWS_12
+
+  # ---- Dockerfile ----
+  # CKV_DOCKER_3: base image `infrastructureascode/hello-world` is
+  # distroless-style with no shell - `USER` switching has no effect
+  # since there's no /etc/passwd to resolve names against.
+  - CKV_DOCKER_3
+  # CKV_DOCKER_7: `:latest` tag is intentional per the comment in
+  # Dockerfile - pinning to a digest would be production-correct but
+  # the take-home ships against the upstream tag.
+  - CKV_DOCKER_7

@@ -1,0 +1,15 @@
+# Bootstrap takes almost no input - it just needs the region (locked to
+# eu-central-1 by the brief) and a tags object that's applied to the state
+# bucket and lock table. Real values are inherited from per-account
+# overrides if you want; defaults are fine for first run.
+
+region = "eu-central-1"
+
+tags = {
+  Environment = "shared"
+  Team        = "platform"
+  CostCenter  = "flawed-by-design"
+  ManagedBy   = "terraform"
+  Product     = "cloud-platform"
+  Service     = "tfstate"
+}

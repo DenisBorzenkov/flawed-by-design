@@ -1,0 +1,71 @@
+# Trivy ignore-list. Mirrors .checkov.yaml skip-check entries so trivy
+# fs and checkov agree on what's accepted vs blocked. Trivy uses its
+# own AVD-* IDs internally but accepts CKV_*, CIS_*, and other vendor
+# IDs as aliases for the same rules.
+#
+# Format: one rule ID per line; blank lines and # comments allowed.
+# See https://aquasecurity.github.io/trivy/latest/docs/configuration/filtering/
+#
+# When you add a row to .checkov.yaml + CHECKOV_TRIAGE.md, also add
+# the same ID here. Both gates have to agree or one will block.
+
+# Network ACLs / Security Groups
+CKV_AWS_231
+CKV_AWS_382
+CKV2_AWS_1
+CKV2_AWS_5
+
+# ALB
+CKV_AWS_150
+CKV_AWS_378
+CKV2_AWS_28
+CKV2_AWS_76
+
+# WAF
+CKV_AWS_192
+CKV2_AWS_31
+
+# ECR
+CKV_AWS_51
+CKV_AWS_136
+
+# CloudWatch
+CKV_AWS_158
+CKV_AWS_338
+
+# ACM
+CKV_AWS_233
+
+# SNS
+CKV_AWS_26
+
+# S3 (ALB log bucket)
+CKV_AWS_18
+CKV_AWS_21
+CKV_AWS_144
+CKV_AWS_145
+CKV2_AWS_62
+
+# Module sources
+CKV_TF_1
+
+# Bootstrap
+CKV2_AWS_61
+
+# VPC module internals
+CKV2_AWS_12
+
+# Dockerfile
+CKV_DOCKER_3
+CKV_DOCKER_7
+
+# Trivy AVD aliases - keep in sync above. Some checkov→trivy mappings
+# emit under AVD-AWS-* prefixes that don't match by CKV_ alone.
+AVD-AWS-0107   # CKV_AWS_382 alias (SG egress 0.0.0.0/0)
+AVD-AWS-0102   # CKV_AWS_231 alias (NACL ingress)
+AVD-AWS-0089   # CKV_AWS_18 alias (S3 access logging)
+AVD-AWS-0090   # CKV_AWS_21 alias (S3 versioning)
+AVD-AWS-0132   # CKV_AWS_145 alias (S3 KMS)
+AVD-AWS-0086   # CKV_AWS_53 alias (S3 BPA)
+AVD-DS-0001    # CKV_DOCKER_7 alias (image latest)
+AVD-DS-0002    # CKV_DOCKER_3 alias (USER directive)

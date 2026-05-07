@@ -1,0 +1,207 @@
+# --------------------------------------------------------------------------
+# Per-account values for `denis` (rename folder to your alias).
+# Copy this file to `terraform.tfvars` (gitignored) and fill in the blanks.
+#
+# This single file is shared across every layer: deploy.sh passes it to
+# every `terraform apply`. Variables that aren't declared in a given layer
+# produce a benign "undeclared variable" warning that deploy.sh swallows
+# with -compact-warnings.
+# --------------------------------------------------------------------------
+
+# ============================================================================
+# REQUIRED - these have no defaults and apply must fail without them.
+# ============================================================================
+
+# Environment short name - used to suffix every resource (`app-dev`, etc).
+env = "dev"
+
+# Email subscribed to ops + billing SNS topics.
+# REQUIRES MANUAL CONFIRM: AWS sends a "Confirm subscription" email at apply time.
+alarm_email = "your-email@example.com"
+
+# State bucket name - set by `accounts/_bootstrap/` once per account.
+# Pattern: tfstate-<account-id>-<region>
+tfstate_bucket = "tfstate-123456789012-eu-central-1"
+
+# ============================================================================
+# COMMON OVERRIDES - sane defaults provided; override per environment.
+# ============================================================================
+
+# Region. Brief locks deployment to eu-central-1; the var has a hard validation.
+# region = "eu-central-1"
+
+# Tag object - wired into AWS provider's default_tags so every taggable
+# resource inherits these. Schema validated in 00-providers/variables.tf:
+#   - Environment, Team, CostCenter, ManagedBy: required, must be non-empty.
+#   - Product, Service: optional with sensible defaults.
+tags = {
+  Environment = "dev"
+  Team        = "platform"
+  CostCenter  = "flawed-by-design"
+  ManagedBy   = "terraform"
+  Product     = "cloud-platform"
+  Service     = "pipeline"
+}
+
+# ============================================================================
+# OPTIONAL - leave commented to skip the corresponding resources.
+# ============================================================================
+
+# Public apex domain. If hosted_zone_id is also set, Route53 A-records for
+# `app.<domain>` and `jenkins.<domain>` are created in 40-observability.
+# domain_name = "denis.example.com"
+
+# Route53 hosted zone ID owning the domain above.
+# hosted_zone_id = "Z01234567ABCDEFGHIJK"
+
+# EC2 keypair name on ECS instances. null = no SSH path (use SSM Session Manager
+# via the SSM endpoint instead).
+# ssh_keypair_name = "my-keypair"
+
+# ============================================================================
+# 10-network - VPC topology. Override only if 10.40/10.41 collide with peers.
+# ============================================================================
+
+# AZs to span. null = first two AZs of var.region.
+# azs = ["eu-central-1a", "eu-central-1b"]
+
+# app_vpc_cidr             = "10.40.0.0/16"
+# app_public_subnet_cidrs  = ["10.40.0.0/24", "10.40.1.0/24"]
+# app_private_subnet_cidrs = ["10.40.10.0/24", "10.40.11.0/24"]
+
+# jenkins_vpc_cidr             = "10.41.0.0/16"
+# jenkins_public_subnet_cidrs  = ["10.41.0.0/24", "10.41.1.0/24"]
+# jenkins_private_subnet_cidrs = ["10.41.10.0/24", "10.41.11.0/24"]
+
+# AWS interface endpoints provisioned in each VPC's private subnets.
+# The default list is the minimum set for ECS-on-EC2 in private subnets without NAT.
+# interface_endpoints = ["ecr.api", "ecr.dkr", "logs", "ssm", "ecs", "ecs-agent", "ecs-telemetry"]
+
+# ============================================================================
+# 20-security - WAF and NACL knobs.
+# ============================================================================
+
+# WAFv2 geo-match allow-list. Brief locks Jenkins to Portugal.
+# allowed_country_codes = ["PT"]
+
+# ============================================================================
+# 30-ecs - clusters, ECR, services, TLS, scaling.
+# ============================================================================
+
+# ECS-on-EC2 sizing per brief: t3.micro x2 per cluster.
+# instance_type = "t3.micro"
+# asg_min       = 2
+# asg_max       = 4
+
+# AMI name filter for the ECS-optimized image.
+# ecs_ami_name_pattern = "al2023-ami-ecs-hvm-*-x86_64"
+
+# CloudWatch log retention for /ecs/<env>/* groups.
+# log_retention_days = 14
+
+# ECR retention + tag mutability.
+# ecr_keep_last_n_images   = 10
+# ecr_image_tag_mutability = "MUTABLE"  # IMMUTABLE for prod with git-sha tags
+
+# Self-signed cert lifetime + key size. Replace with ACM-issued cert in prod.
+# tls_rsa_bits       = 2048
+# tls_validity_hours = 8760
+
+# ASG capacity-provider managed scaling.
+# capacity_provider_target_capacity = 100
+# capacity_provider_min_step        = 1
+# capacity_provider_max_step        = 2
+
+# ECS rolling-deploy bounds.
+# deployment_minimum_healthy_percent = 50
+# deployment_maximum_percent         = 200
+
+# App service. Defaults size two tasks onto one t3.micro.
+# app_service = {
+#   desired_count     = 2
+#   cpu               = 256
+#   memory            = 512
+#   container_port    = 8080
+#   image_tag         = "latest"
+#   listener_priority = 10
+#   health_check_path = "/health"
+# }
+
+# Jenkins service.
+# jenkins_service = {
+#   desired_count     = 1
+#   cpu               = 512
+#   memory            = 512
+#   container_port    = 8080
+#   image_tag         = "lts"
+#   listener_priority = 10
+#   health_check_path = "/login"
+# }
+
+# Container-level (Docker) health check. Defaults are production-safe.
+# container_health_check = {
+#   interval_seconds     = 30
+#   retries              = 3
+#   start_period_seconds = 30
+#   timeout_seconds      = 5
+# }
+
+# ALB target-group health check.
+# target_group_health_check = {
+#   interval_seconds     = 30
+#   timeout_seconds      = 5
+#   healthy_threshold    = 2
+#   unhealthy_threshold  = 3
+#   deregistration_delay = 10
+#   matcher              = "200-299"
+# }
+
+# ============================================================================
+# 40-observability - alarms, R53 health checks, billing.
+# ============================================================================
+
+# EstimatedCharges threshold (USD). Brief: $1/day.
+# billing_threshold_usd        = 1
+# billing_alarm_period_seconds = 21600   # 6h - billing metrics update infrequently
+
+# alb_health_alarm = {
+#   evaluation_periods = 2
+#   period_seconds     = 60
+#   threshold          = 1
+# }
+
+# alb_5xx_alarm = {
+#   evaluation_periods = 1
+#   period_seconds     = 300
+#   threshold          = 0
+# }
+
+# route53_health_check = {
+#   port              = 443
+#   type              = "HTTPS"
+#   failure_threshold = 3
+#   request_interval  = 30
+#   measure_latency   = false
+#   app_path          = "/healthz"
+#   jenkins_path      = "/login"
+# }
+
+# route53_health_alarm = {
+#   evaluation_periods = 2
+#   period_seconds     = 60
+# }
+
+# ============================================================================
+# 50-logging - ALB access-log bucket.
+# ============================================================================
+
+# log_bucket_name_prefix      = "alb-logs"
+# log_bucket_force_destroy    = false
+# log_bucket_versioning_status = "Suspended"
+
+# log_lifecycle = {
+#   transition_to_ia_days     = 30
+#   expiration_days           = 90
+#   abort_incomplete_mpu_days = 7
+#   transition_storage_class  = "STANDARD_IA"
+# }

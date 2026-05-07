@@ -1,0 +1,46 @@
+# --- Terraform ---
+# Local state files (S3 backend in production; local only for bootstrap).
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+
+# Plan outputs and crash logs.
+*.tfplan
+*.tfplan.*
+crash.log
+crash.*.log
+
+# Provider plugin cache and per-init metadata.
+.terraform/
+.terraform.lock.hcl.bak
+
+# --- Per-account values ---
+# Real tfvars contain account IDs and emails - keep in repo only as .example.
+**/terraform.tfvars
+**/*.auto.tfvars
+
+# Backend config files contain account IDs and bucket names.
+**/backend.hcl
+**/backend.tfbackend
+
+# --- Secrets ---
+# Real credentials should live in Transcrypt-encrypted files, not these.
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+.aws/
+
+# --- IDE / OS ---
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
+
+# --- pre-commit local cache ---
+.pre-commit/
+terraform/.external_modules/
